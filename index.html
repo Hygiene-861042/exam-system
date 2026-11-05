@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>段考考務即時管理系統</title>
+<style>
+:root{--bg:#eef3fa;--card:#fff;--tx:#1b2a41;--mut:#5b6b82;--pri:#1f5fbf;--ok:#1f8f4e;--okbg:#e3f5ea;--warn:#c2410c;--warnbg:#fde8dc;--line:#d5deeb;--board:#16384a;--ann:#ffe9a8;--anntx:#4a3600}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1624;--card:#18223a;--tx:#e6edf8;--mut:#9aabc6;--pri:#6aa3ff;--ok:#5fd18e;--okbg:#17382a;--warn:#ff9a6b;--warnbg:#47261a;--line:#2a3a5a;--board:#0b2a37;--ann:#5a4713;--anntx:#ffe9a8}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;padding:16px}
+h1{font-size:1.3rem;margin:0 0 4px}.sub{color:var(--mut);font-size:.9rem;margin:0 0 14px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card h2{font-size:1rem;margin:0 0 10px;color:var(--pri);display:flex;justify-content:space-between;align-items:center}
+label{display:block;font-size:.8rem;color:var(--mut);margin:8px 0 3px}
+input,select,textarea,button{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--tx)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+button{background:var(--pri);color:#fff;border:0;margin-top:10px;cursor:pointer;font-weight:600}
+button:disabled{opacity:.6}
+button.ghost{background:transparent;color:var(--pri);border:1px solid var(--line);width:auto;margin:0;padding:3px 10px;font-size:.78rem}
+table{width:100%;border-collapse:collapse;font-size:.85rem}th,td{padding:5px;border-bottom:1px solid var(--line);text-align:left}
+th{position:sticky;top:0;background:var(--card)}
+.wrap{overflow:auto;max-height:260px;margin-top:10px}
+.stats{display:flex;gap:8px}.stat{flex:1;border-radius:10px;padding:8px;text-align:center;background:var(--bg)}.stat b{display:block;font-size:1.4rem}
+.ok{background:var(--okbg);color:var(--ok)}.warn{background:var(--warnbg);color:var(--warn)}
+.tag{padding:2px 8px;border-radius:999px;font-size:.78rem}
+.board{background:var(--board);color:#fff;border-radius:14px;padding:14px}
+.board h2{color:#fff;margin:0 0 10px;font-size:1rem}.board label{color:#cfe5ee}
+.nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-top:10px}
+.nums div{background:rgba(255,255,255,.12);border-radius:10px;padding:8px}.nums b{display:block;font-size:1.8rem}
+.annbox{background:var(--ann);color:var(--anntx);border-radius:10px;padding:10px;margin-top:10px;min-height:60px}
+.annbox audio{width:100%;margin-top:8px;padding:0;border:0;background:none}
+.live{font-size:.75rem;color:var(--ok);font-weight:400}.live.off{color:var(--warn)}
+.msg{font-size:.8rem;color:var(--warn);min-height:1.1em;margin-top:6px}.msg.good{color:var(--ok)}
+.hide{display:none!important}
+body.full .board{padding:28px}body.full .nums b{font-size:5rem}body.full .annbox{font-size:1.8rem}
+</style>
+</head>
+<body>
+<h1>段考考務即時管理系統 <span class="live" id="live">● 即時同步</span></h1>
+<p class="sub" id="sub">資料存在雲端，各裝置每 5 秒自動更新。</p>
+<div class="grid">
+ <section class="card" id="secT"><h2>教室端（監考老師）</h2>
+  <label>班級</label><select id="tCls"></select>
+  <div class="row"><div><label>應到</label><input id="tExp" type="number" min="0" max="99"></div><div><label>實到</label><input id="tPre" type="number" min="0" max="99"></div></div>
+  <label>考場狀況</label><select id="tSt"><option>正常</option><option>學生身體不適</option><option>設備異常</option><option>其他</option></select>
+  <label>備註</label><textarea id="tNote" rows="2" maxlength="100" placeholder="例如：第2排學生身體不適"></textarea>
+  <button id="tSend">送出回報</button><div class="msg" id="tMsg"></div></section>
+
+ <section class="card" id="secA"><h2>行政端（教務處）<button class="ghost hide" id="aOut">登出</button></h2>
+  <div id="aLock">
+   <label>請輸入行政密碼</label><input id="aPw" type="password" autocomplete="current-password">
+   <button id="aLogin">登入</button><div class="msg" id="aMsg"></div>
+  </div>
+  <div id="aMain" class="hide">
+   <div class="stats"><div class="stat"><span>考場</span><b id="aAll">0</b></div><div class="stat ok"><span>正常</span><b id="aOk">0</b></div><div class="stat warn"><span>需處理</span><b id="aBad">0</b></div></div>
+   <div class="wrap"><table><thead><tr><th>班級</th><th>應到</th><th>實到</th><th>缺席</th><th>狀況</th><th>備註</th></tr></thead><tbody id="aTb"></tbody></table></div>
+   <label>公告對象</label><select id="aTgt"></select>
+   <label>公告內容</label><textarea id="aTxt" rows="2" maxlength="300">【試題更正】第15題選項 (C) 修正為「24」。</textarea>
+   <label>上傳音檔（選填，4 MB 以內）</label><input id="aAud" type="file" accept="audio/*">
+   <button id="aPub">發布公告</button><div class="msg" id="aMsg2"></div>
+  </div>
+ </section>
+
+ <section class="board" id="secB"><h2>電子黑板</h2>
+  <div id="bPick"><label>顯示班級</label><select id="bCls"></select></div>
+  <div class="nums"><div>應到<b id="bExp">0</b></div><div>實到<b id="bPre">0</b></div><div>缺席<b id="bAbs">0</b></div></div>
+  <div class="annbox"><strong>最新公告</strong><div id="bAnn">目前沒有公告</div><audio id="bAud" controls class="hide"></audio></div></section>
+</div>
+<script>
+// 網址參數：?view=teacher | admin | board&class=901  （各裝置只顯示自己需要的畫面）
+var Q=new URLSearchParams(location.search),VIEW=Q.get("view"),POLL=5000;
+var NAMES=[];[7,8,9].forEach(function(g){for(var i=1;i<=10;i++)NAMES.push(""+g+(i<10?"0"+i:i))});
+var S={classes:{},ann:[]},token="";
+try{token=sessionStorage.getItem("exam-token")||""}catch(e){}
+var $=function(i){return document.getElementById(i)};
+function def(){return{exp:30,pre:30,st:"正常",note:""}}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+if(VIEW){$("secT").classList.toggle("hide",VIEW!=="teacher");$("secA").classList.toggle("hide",VIEW!=="admin");$("secB").classList.toggle("hide",VIEW!=="board")}
+if(VIEW==="board"){document.body.classList.add("full");$("sub").classList.add("hide");$("bPick").classList.add("hide")}
+function api(p,o){return fetch(p,o).then(function(r){return r.json().then(function(d){if(!r.ok){var e=new Error(d.error||r.status);e.status=r.status;throw e}return d})})}
+function opts(sel,list,fixed){var v=fixed||sel.value;sel.innerHTML=list.map(function(x){return"<option>"+x+"</option>"}).join("");if(list.indexOf(v)>-1)sel.value=v}
+function fillT(){var c=S.classes[$("tCls").value]||def();$("tExp").value=c.exp;$("tPre").value=c.pre;$("tSt").value=c.st;$("tNote").value=c.note||""}
+function render(){
+ opts($("bCls"),NAMES,Q.get("class"));opts($("aTgt"),["全部班級"].concat(NAMES));
+ var logged=!!token;$("aLock").classList.toggle("hide",logged);$("aMain").classList.toggle("hide",!logged);$("aOut").classList.toggle("hide",!logged);
+ var ok=0,bad=0,h="";
+ NAMES.forEach(function(n){var c=S.classes[n]||def(),good=c.st==="正常";good?ok++:bad++;
+  h+="<tr><td>"+n+"</td><td>"+c.exp+"</td><td>"+c.pre+"</td><td>"+Math.max(0,c.exp-c.pre)+'</td><td><span class="tag '+(good?"ok":"warn")+'">'+esc(c.st)+"</span></td><td>"+esc(c.note||"")+"</td></tr>"});
+ $("aTb").innerHTML=h;$("aAll").textContent=NAMES.length;$("aOk").textContent=ok;$("aBad").textContent=bad;
+ var cn=$("bCls").value,b=S.classes[cn]||def();
+ $("bExp").textContent=b.exp;$("bPre").textContent=b.pre;$("bAbs").textContent=Math.max(0,b.exp-b.pre);
+ var m=S.ann.filter(function(a){return a.to==="全部班級"||a.to===cn}).pop(),au=$("bAud");
+ $("bAnn").textContent=m?m.text:"目前沒有公告";
+ if(m&&m.audio){if(au.dataset.id!==m.id){au.src="/api/audio/"+m.id;au.dataset.id=m.id}au.classList.remove("hide")}
+ else{au.pause();au.removeAttribute("src");au.dataset.id="";au.classList.add("hide")}
+}
+function poll(){if(document.hidden)return;
+ api("/api/state").then(function(d){S=d;$("live").textContent="● 即時同步";$("live").className="live";render()})
+ .catch(function(){$("live").textContent="● 連線中斷";$("live").className="live off"})}
+$("tCls").onchange=fillT;$("bCls").onchange=render;
+$("tSend").onclick=function(){var btn=$("tSend"),m=$("tMsg");btn.disabled=true;m.className="msg";m.textContent="";
+ api("/api/report",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({cls:$("tCls").value,exp:+$("tExp").value,pre:+$("tPre").value,st:$("tSt").value,note:$("tNote").value})})
+ .then(function(d){S.classes[$("tCls").value]=d.rec;render();m.className="msg good";m.textContent="已送出"})
+ .catch(function(e){m.textContent=e.message}).then(function(){btn.disabled=false})};
+$("aLogin").onclick=function(){$("aMsg").textContent="";
+ api("/api/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({password:$("aPw").value})})
+ .then(function(d){token=d.token;try{sessionStorage.setItem("exam-token",token)}catch(e){}$("aPw").value="";render()})
+ .catch(function(e){$("aMsg").textContent=e.message})};
+$("aPw").onkeydown=function(e){if(e.key==="Enter")$("aLogin").click()};
+function logout(){token="";try{sessionStorage.removeItem("exam-token")}catch(e){}render()}
+$("aOut").onclick=logout;
+$("aPub").onclick=function(){var btn=$("aPub"),m=$("aMsg2");m.className="msg";m.textContent="";btn.disabled=true;
+ var f=new FormData();f.append("to",$("aTgt").value);f.append("text",$("aTxt").value);if($("aAud").files[0])f.append("audio",$("aAud").files[0]);
+ api("/api/announce",{method:"POST",headers:{authorization:"Bearer "+token},body:f})
+ .then(function(){$("aAud").value="";m.className="msg good";m.textContent="已發布";poll()})
+ .catch(function(e){if(e.status===401)logout();m.textContent=e.message}).then(function(){btn.disabled=false})};
+opts($("tCls"),NAMES,Q.get("class"));render();fillT();poll();setInterval(poll,POLL);
+document.addEventListener("visibilitychange",poll);
+</script>
+</body>
+</html>
